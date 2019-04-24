@@ -1,0 +1,108 @@
+# Defining Docker compose version reference
+version: '3.7'
+
+# Defining our personal Docker networks using the 'bridge' network driver (https://docs.docker.com/network/bridge/)
+networks:
+  frontend:
+      driver: bridge
+  backend:
+      driver: bridge
+
+# Defining our named volume for persisting MariaDB data so it isn't lost in the case of a rebuild (https://docs.docker.com/storage/volumes/)
+volumes:
+
+  # Named volume for MariaDB
+  mariadb:
+    driver: local #NOTE: We're using the 'local' driver here.. you can find out other drivers here: https://docs.docker.com/storage/storagedriver/select-storage-driver/
+
+#  # Named volume for PHPMyAdmin (Uncomment the two lines below if you'd prefer to use a 'named' volume for PHPMyAdmin rather than the defined 'anonymous' volume)
+#  phpmyadmin:
+#    driver: local #NOTE: We're using the 'local' driver here.. you can find out other drivers here: https://docs.docker.com/storage/storagedriver/select-storage-driver/
+
+# Defining our services (containers)
+services:
+
+  # Wordpress container using the official Wordpress image which provides Apache + PHP and any additional PHP modules
+  # Once running our container could be accessed using http://localhost
+  wordpress:
+    image: wordpress:php7.1
+    volumes:
+      # A bind mount used to make our wordpress folder on our host machine available inside the /var/www/html folder in the container (https://docs.docker.com/storage/bind-mounts/)
+      - ./wordpress:/var/www/html
+
+    # Defining our environment variables (https://docs.docker.com/compose/environment-variables/) as provided by the Wordpress image (https://hub.docker.com/_/wordpress)
+    environment:
+      - WORDPRESS_DB_HOST=mariadb
+      - WORDPRESS_DB_USER=wpuser
+      - WORDPRESS_DB_PASSWORD=wppassword
+      - WORDPRESS_DB_NAME=wordpress
+
+    # Publishing the required ports needed to access the Apache HTTP server (80/tcp) which is exposed in the Wordpress Dockerfile
+    # Remember that without publishing the ports we cannot access the running Wordpress/Apache container
+    ports:
+      - "80:80" # Remember.. HOST:CONTAINER
+
+    # Defining the networks the container needs to exist in. Frontend to be publicly available and Backend for MariaDB
+    networks:
+      - frontend
+      - backend
+
+    # Not discussed during the conference but ensures that MariaDB is brought up before Wordpress (https://docs.docker.com/compose/compose-file/#depends_on)
+    # NOTE: Please read the link document and note that it does not ensure that MariaDB is actually READY but simply started before Wordpress
+    depends_on:
+      - mariadb
+
+  # MariaDB container using the official MariaDB image
+  mariadb:
+    image: mariadb:latest
+    volumes:
+      - mariadb:/var/lib/mysql # Using our mariadb 'named' volume we defined previously
+
+    # Defining our environment variables (https://docs.docker.com/compose/environment-variables/) as provided by the Wordpress image (https://hub.docker.com/_/mariadb)
+    environment:
+      - MYSQL_DATABASE=wordpress
+      - MYSQL_USER=wpuser
+      - MYSQL_PASSWORD=wppassword
+      - MYSQL_RANDOM_ROOT_PASSWORD=yes # NOTE: Remember to scan the out logs for the random password printed out ( EG: GENERATED ROOT PASSWORD: <YOUR-RANDOM-ROOT-PASSWORD>)
+
+    # Defining the network the container needs to exist in. For isolation we opted to keep it hidden away
+    networks:
+      - backend
+
+  # PHPMyAdmin container using the official image which simply provides a web based user interface to access our MariaDB data. It was added purely as a bonus
+  # Once running our container could be accessed using http://localhost:8080
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    volumes:
+
+      # Example of an 'anonymous' volume used to store PHPMyAdmin's session data
+      - /sessions
+
+      # If you wished you could also use a 'named' volume too. In order to do so follow the following steps:
+      # 1) Uncomment the 'named' volume phpmyadmin as noted in the 'volumes' section (lines 19 + 20)
+      # 2) Comment out the 'anonymous' volume defined about (line 74) using a # sign
+      # 3) Uncomment the 'named' volume definition below
+     # - phpmyadmin:/sessions
+
+    # Defining our environment variables (https://docs.docker.com/compose/environment-variables/) as provided by the PHPMyAdmin image (https://hub.docker.com/r/phpmyadmin/phpmyadmin)
+    environment:
+      - PMA_ARBITRARY=1
+      - PMA_HOST=mariadb
+      - PMA_PORT=3306
+      - PMA_USER=wpuser
+      - PMA_PASSWORD=wppassword
+
+    # Publishing the required ports needed to access the container.
+    # Remember: We can't have two containers (or services in general) running on the same port, but we CAN map the container port (80) to a different one on the host (8080)
+    ports:
+      - "8080:80" # Remember.. HOST:CONTAINER
+
+    # Defining the networks the container needs to exist in. Frontend to be publicly available and Backend for MariaDB
+    networks:
+      - frontend
+      - backend
+
+    # Not discussed during the conference but ensures that MariaDB is brought up before Wordpress (https://docs.docker.com/compose/compose-file/#depends_on)
+    # NOTE: Please read the link document and note that it does not ensure that MariaDB is actually READY but simply started before Wordpress
+    depends_on:
+      - mariadb

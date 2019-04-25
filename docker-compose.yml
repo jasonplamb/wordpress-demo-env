@@ -4,16 +4,16 @@ version: '3.7'
 # Defining our personal Docker networks using the 'bridge' network driver (https://docs.docker.com/network/bridge/)
 networks:
   frontend:
-      driver: bridge
+      driver: ${APP_NETWORKS_DRIVER}
   backend:
-      driver: bridge
+      driver: ${APP_NETWORKS_DRIVER}
 
 # Defining our named volume for persisting MariaDB data so it isn't lost in the case of a rebuild (https://docs.docker.com/storage/volumes/)
 volumes:
 
   # Named volume for MariaDB
   mariadb:
-    driver: local #NOTE: We're using the 'local' driver here.. you can find out other drivers here: https://docs.docker.com/storage/storagedriver/select-storage-driver/
+    driver: ${APP_VOLUMES_DRIVER} #NOTE: We're using the 'local' driver here.. you can find out other drivers here: https://docs.docker.com/storage/storagedriver/select-storage-driver/
 
 #  # Named volume for PHPMyAdmin (Uncomment the two lines below if you'd prefer to use a 'named' volume for PHPMyAdmin rather than the defined 'anonymous' volume)
 #  phpmyadmin:
@@ -25,22 +25,22 @@ services:
   # Wordpress container using the official Wordpress image which provides Apache + PHP and any additional PHP modules
   # Once running our container could be accessed using http://localhost
   wordpress:
-    image: wordpress:php7.1
+    image: wordpress:php${WORDPRESS_IMAGE_PHP_VERSION}
     volumes:
       # A bind mount used to make our wordpress folder on our host machine available inside the /var/www/html folder in the container (https://docs.docker.com/storage/bind-mounts/)
       - ./wordpress:/var/www/html
 
     # Defining our environment variables (https://docs.docker.com/compose/environment-variables/) as provided by the Wordpress image (https://hub.docker.com/_/wordpress)
     environment:
-      - WORDPRESS_DB_HOST=mariadb
-      - WORDPRESS_DB_USER=wpuser
-      - WORDPRESS_DB_PASSWORD=wppassword
-      - WORDPRESS_DB_NAME=wordpress
+      - WORDPRESS_DB_HOST=${WORDPRESS_DB_HOST}
+      - WORDPRESS_DB_USER=${WORDPRESS_DB_USER}
+      - WORDPRESS_DB_PASSWORD=${WORDPRESS_DB_PASSWORD}
+      - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME}
 
     # Publishing the required ports needed to access the Apache HTTP server (80/tcp) which is exposed in the Wordpress Dockerfile
     # Remember that without publishing the ports we cannot access the running Wordpress/Apache container
     ports:
-      - "80:80" # Remember.. HOST:CONTAINER
+      - "${WORDPRESS_HOST_PUBLISH_PORT}:80" # Remember.. HOST:CONTAINER
 
     # Defining the networks the container needs to exist in. Frontend to be publicly available and Backend for MariaDB
     networks:
@@ -60,10 +60,10 @@ services:
 
     # Defining our environment variables (https://docs.docker.com/compose/environment-variables/) as provided by the Wordpress image (https://hub.docker.com/_/mariadb)
     environment:
-      - MYSQL_DATABASE=wordpress
-      - MYSQL_USER=wpuser
-      - MYSQL_PASSWORD=wppassword
-      - MYSQL_RANDOM_ROOT_PASSWORD=yes # NOTE: Remember to scan the out logs for the random password printed out ( EG: GENERATED ROOT PASSWORD: <YOUR-RANDOM-ROOT-PASSWORD>)
+      - MYSQL_DATABASE=${WORDPRESS_DB_NAME}
+      - MYSQL_USER=${WORDPRESS_DB_USER}
+      - MYSQL_PASSWORD=${WORDPRESS_DB_PASSWORD}
+      - MYSQL_RANDOM_ROOT_PASSWORD=${MYSQL_RANDOM_ROOT_PASSWORD} # NOTE: Remember to scan the out logs for the random password printed out ( EG: GENERATED ROOT PASSWORD: <YOUR-RANDOM-ROOT-PASSWORD>)
 
     # Defining the network the container needs to exist in. For isolation we opted to keep it hidden away
     networks:
@@ -86,16 +86,13 @@ services:
 
     # Defining our environment variables (https://docs.docker.com/compose/environment-variables/) as provided by the PHPMyAdmin image (https://hub.docker.com/r/phpmyadmin/phpmyadmin)
     environment:
-      - PMA_ARBITRARY=1
-      - PMA_HOST=mariadb
-      - PMA_PORT=3306
-      - PMA_USER=wpuser
-      - PMA_PASSWORD=wppassword
+      - PMA_ARBITRARY=${PMA_ARBITRARY}
+      - PMA_HOST=${WORDPRESS_DB_HOST}
 
     # Publishing the required ports needed to access the container.
     # Remember: We can't have two containers (or services in general) running on the same port, but we CAN map the container port (80) to a different one on the host (8080)
     ports:
-      - "8080:80" # Remember.. HOST:CONTAINER
+      - "${PMA_HOST_PUBLISH_PORT}:80" # Remember.. HOST:CONTAINER
 
     # Defining the networks the container needs to exist in. Frontend to be publicly available and Backend for MariaDB
     networks:
